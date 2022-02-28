@@ -1,6 +1,6 @@
 # ALIKE: Accurate and Lightweight Keypoint Detection and Descriptor Extraction
 
-ALIKE applies a differentiable keypoint detection module to detect accurate sub-pixel keypoints. The network can run at 95 frames per second for 640 x 480 images on NVIDIA Titan RTX GPU and achieve equivalent performance with the state-of-the-arts. ALIKE benefits real-time applications in resource-limited platforms/devices. Technical details are described in [this paper](https://arxiv.org/pdf/2112.02906.pdf).
+ALIKE applies a differentiable keypoint detection module to detect accurate sub-pixel keypoints. The network can run at 95 frames per second for 640 x 480 images on NVIDIA Titan X (Pascal) GPU and achieve equivalent performance with the state-of-the-arts. ALIKE benefits real-time applications in resource-limited platforms/devices. Technical details are described in [this paper](https://arxiv.org/pdf/2112.02906.pdf).
 
 > ```
 > Xiaoming Zhao, Xingming Wu, Jinyu Miao, Weihai Chen, Peter C. Y. Chen, Zhengguo Li, "ALIKE: Accurate and Lightweight Keypoint
