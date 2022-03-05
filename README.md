@@ -105,7 +105,7 @@ python demo.py assets/tum
 ### Evaluation on Hpatches
 
 - Download [hpatches-sequences-release](https://hpatches.github.io/) and put it into `hseq/hpatches-sequences-release`.
-- Remove the unrelaiable sequences as D2-Net.
+- Remove the unreliable sequences as D2-Net.
 - Run the following command to evaluate the performance:
   ```shell  
   python hseq/eval.py
