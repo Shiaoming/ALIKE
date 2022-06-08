@@ -54,8 +54,7 @@ class ImageLoader(object):
             filename = self.images[item]
             img = cv2.imread(filename)
             if img is None:
-                raise Exception('Error reading image %s' % filename)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+                raise Exception('Error reading image %s' % filename)        
         return img
 
     def __len__(self):
@@ -143,8 +142,9 @@ if __name__ == '__main__':
     for img in progress_bar:
         if img is None:
             break
-
-        pred = model(img, sub_pixel=not args.no_sub_pixel)
+        
+        img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        pred = model(img_rgb, sub_pixel=not args.no_sub_pixel)
         kpts = pred['keypoints']
         desc = pred['descriptors']
         runtime.append(pred['time'])
