@@ -55,7 +55,7 @@ class ImageLoader(object):
             img = cv2.imread(filename)
             if img is None:
                 raise Exception('Error reading image %s' % filename)
-
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
         return img
 
     def __len__(self):
