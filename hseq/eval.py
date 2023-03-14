@@ -152,7 +152,7 @@ if __name__ == '__main__':
         i_err, v_err, i_err_hom, v_err_hom, _ = errors[method]
 
         print(f"====={name}=====")
-        print(f"MMA@1 MMA@5 MMA@3 MHA@1 MHA@5 MHA@3: ", end='')
+        print(f"MMA@1 MMA@2 MMA@3 MHA@1 MHA@2 MHA@3: ", end='')
         for thr in range(1, 4):
             err = (i_err[thr] + v_err[thr]) / ((n_i + n_v) * 5)
             print(f"{err * 100:.2f}%", end=' ')
