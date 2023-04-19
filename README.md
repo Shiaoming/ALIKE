@@ -1,4 +1,7 @@
-# News: the cpp version is released [ALIKE-cpp](https://github.com/Shiaoming/ALIKE-cpp).
+# News
+
+- The [ALIKED](https://github.com/Shiaoming/ALIKED) is released.
+- The [ALIKE training code](https://github.com/Shiaoming/ALIKE/raw/main/assets/ALIKE_code.zip) is released.
 
 # ALIKE: Accurate and Lightweight Keypoint Detection and Descriptor Extraction
 
