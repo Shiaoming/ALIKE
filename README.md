@@ -18,6 +18,17 @@ ALIKE applies a differentiable keypoint detection module to detect accurate sub-
 If you use ALIKE in an academic work, please cite:
 
 ```
+@article{Zhao2023ALIKED,
+    title = {ALIKED: A Lighter Keypoint and Descriptor Extraction Network via Deformable Transformation},
+    url = {https://arxiv.org/pdf/2304.03608.pdf},
+    doi = {10.1109/TIM.2023.3271000},
+    journal = {IEEE Transactions on Instrumentation & Measurement},
+    author = {Zhao, Xiaoming and Wu, Xingming and Chen, Weihai and Chen, Peter C. Y. and Xu, Qingsong and Li, Zhengguo},
+    year = {2023},
+    volume = {72},
+    pages = {1-16},
+}
+
 @article{Zhao2022ALIKE,
     title = {ALIKE: Accurate and Lightweight Keypoint Detection and Descriptor Extraction},
     url = {http://arxiv.org/abs/2112.02906},
