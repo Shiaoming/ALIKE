@@ -1,3 +1,4 @@
+from typing import List, Union
 import torch
 from torch import nn
 import torch.nn.functional as F
@@ -16,27 +17,28 @@ import torch.nn.functional as F
 #  | |---------------------------|
 #  v
 # [ y: range=-1.0~1.0; h: range=0~H ]
-
 def simple_nms(scores, nms_radius: int):
     """ Fast Non-maximum suppression to remove nearby points """
     assert (nms_radius >= 0)
 
-    def max_pool(x):
-        return torch.nn.functional.max_pool2d(
-            x, kernel_size=nms_radius * 2 + 1, stride=1, padding=nms_radius)
-
+    
     zeros = torch.zeros_like(scores)
-    max_mask = scores == max_pool(scores)
+    max_mask = scores == max_pool(scores, nms_radius)
 
     for _ in range(2):
-        supp_mask = max_pool(max_mask.float()) > 0
+        supp_mask = max_pool(max_mask.float(), nms_radius) > 0
         supp_scores = torch.where(supp_mask, zeros, scores)
-        new_max_mask = supp_scores == max_pool(supp_scores)
+        new_max_mask = supp_scores == max_pool(supp_scores, nms_radius)
         max_mask = max_mask | (new_max_mask & (~supp_mask))
     return torch.where(max_mask, scores, zeros)
 
 
-def sample_descriptor(descriptor_map, kpts, bilinear_interp=False):
+def max_pool(x, nms_radius: int):
+    return torch.nn.functional.max_pool2d(
+        x, kernel_size=nms_radius * 2 + 1, stride=1, padding=nms_radius)
+
+
+def sample_descriptor(descriptor_map:torch.Tensor, kpts:List[torch.Tensor], bilinear_interp:bool=False) -> List[torch.Tensor]:
     """
     :param descriptor_map: BxCxHxW
     :param kpts: list, len=B, each is Nx2 (keypoints) [h,w]
@@ -45,7 +47,7 @@ def sample_descriptor(descriptor_map, kpts, bilinear_interp=False):
     """
     batch_size, channel, height, width = descriptor_map.shape
 
-    descriptors = []
+    descriptors:List[torch.Tensor] = []
     for index in range(batch_size):
         kptsi = kpts[index]  # Nx2,(x,y)
 
@@ -53,11 +55,12 @@ def sample_descriptor(descriptor_map, kpts, bilinear_interp=False):
             descriptors_ = torch.nn.functional.grid_sample(descriptor_map[index].unsqueeze(0), kptsi.view(1, 1, -1, 2),
                                                            mode='bilinear', align_corners=True)[0, :, 0, :]  # CxN
         else:
-            kptsi = (kptsi + 1) / 2 * kptsi.new_tensor([[width - 1, height - 1]])
+            kptsi = (kptsi + 1) / 2 * torch.tensor([[width - 1, height - 1]], dtype=kptsi.dtype, device=kptsi.device)
+
             kptsi = kptsi.long()
             descriptors_ = descriptor_map[index, :, kptsi[:, 1], kptsi[:, 0]]  # CxN
 
-        descriptors_ = torch.nn.functional.normalize(descriptors_, p=2, dim=0)
+        descriptors_ = torch.nn.functional.normalize(descriptors_, p=2.0, dim=0)
         descriptors.append(descriptors_.t())
 
     return descriptors
@@ -87,22 +90,26 @@ class DKD(nn.Module):
         # (kernel_size*kernel_size) x 2 : (w,h)
         self.hw_grid = torch.stack(torch.meshgrid([x, x])).view(2, -1).t()[:, [1, 0]]
 
-    def detect_keypoints(self, scores_map, sub_pixel=True):
+    def detect_keypoints(self, scores_map, sub_pixel: bool=True):
         b, c, h, w = scores_map.shape
         scores_nograd = scores_map.detach()
         # nms_scores = simple_nms(scores_nograd, self.radius)
         nms_scores = simple_nms(scores_nograd, 2)
 
+        radius: int = self.radius
+        h_int: int = h 
+        w_int: int = w
+
         # remove border
-        nms_scores[:, :, :self.radius + 1, :] = 0
-        nms_scores[:, :, :, :self.radius + 1] = 0
-        nms_scores[:, :, h - self.radius:, :] = 0
-        nms_scores[:, :, :, w - self.radius:] = 0
+        nms_scores[:, :, :radius + 1, :] = 0
+        nms_scores[:, :, :, :radius + 1] = 0
+        nms_scores[:, :, h_int - radius:, :] = 0
+        nms_scores[:, :, :, w_int - radius:] = 0
 
         # detect keypoints without grad
         if self.top_k > 0:
             topk = torch.topk(nms_scores.view(b, -1), self.top_k)
-            indices_keypoints = topk.indices  # B x top_k
+            indices_keypoints = [topk.indices]  # B x top_k
         else:
             if self.scores_th > 0:
                 masks = nms_scores > self.scores_th
@@ -114,10 +121,10 @@ class DKD(nn.Module):
                 masks = nms_scores > th.reshape(b, 1, 1, 1)
             masks = masks.reshape(b, -1)
 
-            indices_keypoints = []  # list, B x (any size)
+            indices_keypoints:List[torch.Tensor] = []  # list, B x (any size)
             scores_view = scores_nograd.reshape(b, -1)
             for mask, scores in zip(masks, scores_view):
-                indices = mask.nonzero(as_tuple=False)[:, 0]
+                indices = mask.nonzero()[:, 0]
                 if len(indices) > self.n_limit:
                     kpts_sc = scores[indices]
                     sort_idx = kpts_sc.sort(descending=True)[1]
@@ -126,7 +133,7 @@ class DKD(nn.Module):
                 indices_keypoints.append(indices)
 
         keypoints = []
-        scoredispersitys = []
+        scoredispersitys: List[Union[torch.Tensor, None]] = []
         kptscores = []
         if sub_pixel:
             # detect soft keypoints with grad backpropagation
@@ -151,8 +158,7 @@ class DKD(nn.Module):
                 # compute result keypoints
                 keypoints_xy_nms = torch.stack([indices_kpt % w, indices_kpt // w], dim=1)  # Mx2
                 keypoints_xy = keypoints_xy_nms + xy_residual
-                keypoints_xy = keypoints_xy / keypoints_xy.new_tensor(
-                    [w - 1, h - 1]) * 2 - 1  # (w,h) -> (-1~1,-1~1)
+                keypoints_xy = keypoints_xy / torch.tensor([w - 1, h - 1], dtype=keypoints_xy.dtype, device=keypoints_xy.device) * 2 - 1
 
                 kptscore = torch.nn.functional.grid_sample(scores_map[b_idx].unsqueeze(0),
                                                            keypoints_xy.view(1, 1, -1, 2),
@@ -165,8 +171,9 @@ class DKD(nn.Module):
             for b_idx in range(b):
                 indices_kpt = indices_keypoints[b_idx]  # one dimension vector, say its size is M
                 keypoints_xy_nms = torch.stack([indices_kpt % w, indices_kpt // w], dim=1)  # Mx2
-                keypoints_xy = keypoints_xy_nms / keypoints_xy_nms.new_tensor(
-                    [w - 1, h - 1]) * 2 - 1  # (w,h) -> (-1~1,-1~1)
+                keypoints_xy = keypoints_xy_nms / torch.tensor([w - 1, h - 1], dtype=keypoints_xy_nms.dtype, device=keypoints_xy_nms.device) * 2 - 1
+                # (w,h) -> (-1~1,-1~1)
+
                 kptscore = torch.nn.functional.grid_sample(scores_map[b_idx].unsqueeze(0),
                                                            keypoints_xy.view(1, 1, -1, 2),
                                                            mode='bilinear', align_corners=True)[0, 0, 0, :]  # CxN
@@ -176,7 +183,7 @@ class DKD(nn.Module):
 
         return keypoints, scoredispersitys, kptscores
 
-    def forward(self, scores_map, descriptor_map, sub_pixel=False):
+    def forward(self, scores_map, descriptor_map, sub_pixel: bool=False):
         """
         :param scores_map:  Bx1xHxW
         :param descriptor_map: BxCxHxW

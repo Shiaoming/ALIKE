@@ -1,26 +1,20 @@
 import torch
 from torch import nn
 from torchvision.models import resnet
-from typing import Optional, Callable
+from typing import Optional, Callable, Tuple
 
 
 class ConvBlock(nn.Module):
-    def __init__(self, in_channels, out_channels,
-                 gate: Optional[Callable[..., nn.Module]] = None,
-                 norm_layer: Optional[Callable[..., nn.Module]] = None):
+    def __init__(self, in_channels, out_channels):
         super().__init__()
-        if gate is None:
-            self.gate = nn.ReLU(inplace=True)
-        else:
-            self.gate = gate
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
+        self.gate = nn.ReLU(inplace=True)
+        norm_layer = nn.BatchNorm2d
         self.conv1 = resnet.conv3x3(in_channels, out_channels)
         self.bn1 = norm_layer(out_channels)
         self.conv2 = resnet.conv3x3(out_channels, out_channels)
         self.bn2 = norm_layer(out_channels)
 
-    def forward(self, x):
+    def forward(self, x) -> torch.Tensor:
         x = self.gate(self.bn1(self.conv1(x)))  # B x in_channels x H x W
         x = self.gate(self.bn2(self.conv2(x)))  # B x out_channels x H x W
         return x
@@ -39,16 +33,11 @@ class ResBlock(nn.Module):
             groups: int = 1,
             base_width: int = 64,
             dilation: int = 1,
-            gate: Optional[Callable[..., nn.Module]] = None,
-            norm_layer: Optional[Callable[..., nn.Module]] = None
     ) -> None:
         super(ResBlock, self).__init__()
-        if gate is None:
-            self.gate = nn.ReLU(inplace=True)
-        else:
-            self.gate = gate
-        if norm_layer is None:
-            norm_layer = nn.BatchNorm2d
+        self.gate = nn.ReLU(inplace=True)
+        norm_layer = nn.BatchNorm2d
+        
         if groups != 1 or base_width != 64:
             raise ValueError('ResBlock only supports groups=1 and base_width=64')
         if dilation > 1:
@@ -91,20 +80,14 @@ class ALNet(nn.Module):
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
         self.pool4 = nn.MaxPool2d(kernel_size=4, stride=4)
 
-        self.block1 = ConvBlock(3, c1, self.gate, nn.BatchNorm2d)
+        self.block1 = ConvBlock(3, c1)
 
         self.block2 = ResBlock(inplanes=c1, planes=c2, stride=1,
-                               downsample=nn.Conv2d(c1, c2, 1),
-                               gate=self.gate,
-                               norm_layer=nn.BatchNorm2d)
+                               downsample=nn.Conv2d(c1, c2, 1))
         self.block3 = ResBlock(inplanes=c2, planes=c3, stride=1,
-                               downsample=nn.Conv2d(c2, c3, 1),
-                               gate=self.gate,
-                               norm_layer=nn.BatchNorm2d)
+                               downsample=nn.Conv2d(c2, c3, 1))
         self.block4 = ResBlock(inplanes=c3, planes=c4, stride=1,
-                               downsample=nn.Conv2d(c3, c4, 1),
-                               gate=self.gate,
-                               norm_layer=nn.BatchNorm2d)
+                               downsample=nn.Conv2d(c3, c4, 1))
 
         # ================================== feature aggregation
         self.conv1 = resnet.conv1x1(c1, dim // 4)
@@ -122,7 +105,7 @@ class ALNet(nn.Module):
             self.convhead1 = resnet.conv1x1(dim, dim)
         self.convhead2 = resnet.conv1x1(dim, dim + 1)
 
-    def forward(self, image):
+    def forward(self, image) -> Tuple[torch.Tensor, torch.Tensor]:
         # ================================== feature encoder
         x1 = self.block1(image)  # B x c1 x H x W
         x2 = self.pool2(x1)
